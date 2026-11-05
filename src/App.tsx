@@ -1,4 +1,8 @@
 import { useState, useEffect } from 'react';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { auth, db } from './firebase';
+import Auth from './Auth';
 
 // --- INLINE SVGS ---
 const Volume2 = (p: any) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>;
@@ -44,7 +48,6 @@ const CURRICULUM = {
   C2: [{ title: "Stylistics", de: "Stylistik", desc: "Mastery.", content: "### Stylistics" }]
 };
 
-// --- WRITING PROMPTS DATABASE ---
 const WRITING_PROMPTS: Record<string, string[]> = {
   A1: [
     "Hello, my name is Anna and I live in Berlin.",
@@ -91,8 +94,37 @@ const WRITING_PROMPTS: Record<string, string[]> = {
 };
 
 export default function App() {
+  const [user, setUser] = useState<any>(null);
   const [xp, setXp] = useState(0);
   const [selectedLevel, setSelectedLevel] = useState('A1');
+
+  // Listen for login/logout and sync with Firebase
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
+          setXp(userDoc.data().xp || 0);
+          setSelectedLevel(userDoc.data().level || 'A1');
+        } else {
+          await setDoc(userDocRef, { xp: 0, level: 'A1' });
+        }
+      } else {
+        setXp(0);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Save XP and Level to Firestore whenever they change
+  useEffect(() => {
+    if (user) {
+      setDoc(doc(db, 'users', user.uid), { xp, level: selectedLevel }, { merge: true });
+    }
+  }, [xp, selectedLevel, user]);
+
   const [currentView, setCurrentView] = useState<'hub' | 'lesson' | 'game'>('hub');
   const [selectedLesson, setSelectedLesson] = useState<any>(null);
   
@@ -113,7 +145,6 @@ export default function App() {
   const [readingQuizAnswer, setReadingQuizAnswer] = useState<number | null>(null);
   const [readingSubmitted, setReadingSubmitted] = useState(false);
 
-  // Generate a random writing prompt when level changes or writing module opens
   useEffect(() => {
     if (activeGameModule === 'writing') {
       generateNewWritingPrompt();
@@ -166,7 +197,7 @@ export default function App() {
         return;
       }
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -207,6 +238,16 @@ export default function App() {
     }, 3000);
   };
 
+  const handleLogout = () => signOut(auth);
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans px-6">
+        <Auth />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       <header className="border-b border-slate-800 bg-slate-900/80 sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
@@ -222,6 +263,9 @@ export default function App() {
         </div>
 
         <div className="flex items-center space-x-6">
+          <button onClick={handleLogout} className="text-xs font-bold text-slate-400 hover:text-rose-400 transition-colors">
+            Sign Out
+          </button>
           <div className="flex items-center space-x-2 bg-slate-800 px-4 py-2 rounded-2xl">
             <Trophy className="w-5 h-5 text-amber-400" />
             <div className="text-sm font-bold text-amber-300">{xp} XP</div>

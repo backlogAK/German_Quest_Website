@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 // --- INLINE SVGS ---
 const Volume2 = (p: any) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>;
@@ -44,6 +44,52 @@ const CURRICULUM = {
   C2: [{ title: "Stylistics", de: "Stylistik", desc: "Mastery.", content: "### Stylistics" }]
 };
 
+// --- WRITING PROMPTS DATABASE ---
+const WRITING_PROMPTS: Record<string, string[]> = {
+  A1: [
+    "Hello, my name is Anna and I live in Berlin.",
+    "Where is the train station, please?",
+    "I have a dog and a cat.",
+    "I would like a coffee, please.",
+    "Today the weather is very beautiful."
+  ],
+  A2: [
+    "Yesterday I went to the cinema with my friends.",
+    "Because it is raining, I am staying at home today.",
+    "I bought a new book on the weekend.",
+    "We have to work late today.",
+    "Can you help me with my homework, please?"
+  ],
+  B1: [
+    "If I had more time, I would learn Spanish.",
+    "It is very important to eat healthy food every day.",
+    "Although I was tired, I went jogging in the park.",
+    "I am really looking forward to my summer holidays.",
+    "She told me that she is moving to Munich next month."
+  ],
+  B2: [
+    "The ongoing digitalization offers numerous opportunities for education.",
+    "It is essential to consider the environmental impact of our actions.",
+    "I highly doubt that this is the most effective solution to the problem.",
+    "Despite the major challenges, we managed to successfully complete the project.",
+    "I would argue that remote work significantly increases overall productivity."
+  ],
+  C1: [
+    "It cannot be denied that linguistic competence is key to professional success.",
+    "The ambivalence of the current economic situation is quite apparent.",
+    "I would like to elaborate on this specific aspect of the sociological theory.",
+    "In retrospect, the committee's initial decision was somewhat premature.",
+    "The new policy aims to foster sustainable development in urban areas."
+  ],
+  C2: [
+    "The successive implementation of advanced algorithms optimizes complex workflows.",
+    "It is incumbent upon us to mitigate these systemic risks proactively.",
+    "The esoteric nature of the academic discourse completely alienated the layperson.",
+    "He circumvented the controversial issue with remarkable rhetorical finesse.",
+    "This paradigm shift necessitates a fundamental reassessment of our core corporate values."
+  ]
+};
+
 export default function App() {
   const [xp, setXp] = useState(0);
   const [selectedLevel, setSelectedLevel] = useState('A1');
@@ -59,12 +105,28 @@ export default function App() {
   const [speakingTranscript, setSpeakingTranscript] = useState('');
   const [speakingFeedback, setSpeakingFeedback] = useState('');
 
+  const [currentWritingPrompt, setCurrentWritingPrompt] = useState('');
   const [userWritingText, setUserWritingText] = useState('');
   const [writingFeedback, setWritingFeedback] = useState('');
   const [isEvaluatingWriting, setIsEvaluatingWriting] = useState(false);
 
   const [readingQuizAnswer, setReadingQuizAnswer] = useState<number | null>(null);
   const [readingSubmitted, setReadingSubmitted] = useState(false);
+
+  // Generate a random writing prompt when level changes or writing module opens
+  useEffect(() => {
+    if (activeGameModule === 'writing') {
+      generateNewWritingPrompt();
+    }
+  }, [activeGameModule, selectedLevel]);
+
+  const generateNewWritingPrompt = () => {
+    const prompts = WRITING_PROMPTS[selectedLevel] || WRITING_PROMPTS['A1'];
+    const randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];
+    setCurrentWritingPrompt(randomPrompt);
+    setUserWritingText('');
+    setWritingFeedback('');
+  };
 
   const vocabularyData: Record<string, { de: string; en: string; hint: string }[]> = {
     A1: [
@@ -98,18 +160,33 @@ export default function App() {
     setIsEvaluatingWriting(true);
     setWritingFeedback('');
     try {
+      if (!API_KEY) {
+        setWritingFeedback("API Error: Missing Gemini API Key. Ensure VITE_GEMINI_API_KEY is set in your .env file.");
+        setIsEvaluatingWriting(false);
+        return;
+      }
+
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: `Evaluate German sentence at level ${selectedLevel}: "${userWritingText}".` }] }]
+          contents: [{ parts: [{ 
+            text: `You are an expert German language tutor. The student (Level ${selectedLevel}) was asked to translate this English sentence into German:\n\nEnglish: "${currentWritingPrompt}"\n\nStudent's German translation: "${userWritingText}"\n\nEvaluate if the German translation accurately conveys the semantic meaning of the English sentence (it doesn't need to be word-for-word). Provide friendly, concise feedback, point out any grammar or spelling mistakes, and offer a natural-sounding alternative if theirs is awkward.` 
+          }] }]
         })
       });
       const data = await response.json();
-      setWritingFeedback(data.candidates?.[0]?.content?.parts?.[0]?.text || "Feedback generated.");
-      setXp(prev => prev + 50);
-    } catch {
-      setWritingFeedback("Error connecting to AI.");
+
+      if (data.error) {
+        setWritingFeedback(`API Error: ${data.error.message}`);
+      } else if (data.candidates && data.candidates[0].content.parts[0].text) {
+        setWritingFeedback(data.candidates[0].content.parts[0].text);
+        setXp(prev => prev + 50);
+      } else {
+        setWritingFeedback("Could not generate feedback. The API returned an empty response.");
+      }
+    } catch (e: any) {
+      setWritingFeedback("Network Error: Could not connect to Gemini AI. " + e.message);
     } finally {
       setIsEvaluatingWriting(false);
     }
@@ -281,11 +358,31 @@ export default function App() {
 
               {activeGameModule === 'writing' && (
                 <div className="flex flex-col gap-4">
-                  <textarea rows={4} value={userWritingText} onChange={(e) => setUserWritingText(e.target.value)} placeholder="Write in German..." className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 text-sm text-white" />
-                  <button onClick={handleEvaluateWriting} disabled={isEvaluatingWriting} className="px-6 py-3 bg-indigo-600 rounded-2xl text-xs font-bold w-fit">
-                    {isEvaluatingWriting ? "Evaluating..." : "Evaluate Writing"}
-                  </button>
-                  {writingFeedback && <div className="bg-slate-950 p-4 rounded-2xl text-xs">{writingFeedback}</div>}
+                  <div className="bg-slate-950 p-6 rounded-2xl border border-indigo-500/30">
+                    <p className="text-xs text-indigo-300 font-bold mb-1 uppercase tracking-wider">Translate to German:</p>
+                    <p className="text-xl text-white font-medium">"{currentWritingPrompt}"</p>
+                  </div>
+                  <textarea 
+                    rows={4} 
+                    value={userWritingText} 
+                    onChange={(e) => setUserWritingText(e.target.value)} 
+                    placeholder="Type your German translation here..." 
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 outline-none rounded-2xl p-4 text-sm text-white transition-colors" 
+                  />
+                  <div className="flex gap-4">
+                    <button onClick={handleEvaluateWriting} disabled={isEvaluatingWriting || !userWritingText.trim()} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 transition-all rounded-2xl text-xs font-bold shadow-lg shadow-indigo-600/30">
+                      {isEvaluatingWriting ? "Evaluating Translation..." : "Submit for Evaluation (+50 XP)"}
+                    </button>
+                    <button onClick={generateNewWritingPrompt} className="px-6 py-3 bg-slate-800 hover:bg-slate-700 transition-all rounded-2xl text-xs font-bold text-slate-200">
+                      Skip / Get New Sentence
+                    </button>
+                  </div>
+                  {writingFeedback && (
+                    <div className="bg-slate-950 border border-indigo-500/30 p-6 rounded-2xl text-sm text-slate-200 whitespace-pre-line leading-relaxed mt-2">
+                      <p className="text-indigo-400 font-bold mb-2">AI Tutor Feedback:</p>
+                      {writingFeedback}
+                    </div>
+                  )}
                 </div>
               )}
 

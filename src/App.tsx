@@ -232,6 +232,32 @@ export default function App() {
     }
   };
 
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ 
+            text: `You are an expert German language tutor. The student (Level ${selectedLevel}) was asked to translate this English sentence into German:\n\nEnglish: "${currentWritingPrompt}"\n\nStudent's German translation: "${userWritingText}"\n\nEvaluate if the German translation accurately conveys the semantic meaning of the English sentence (it doesn't need to be word-for-word). Provide friendly, concise feedback, point out any grammar or spelling mistakes, and offer a natural-sounding alternative if theirs is awkward.` 
+          }] }]
+        })
+      });
+      const data = await response.json();
+
+      if (data.error) {
+        setWritingFeedback(`API Error: ${data.error.message}`);
+      } else if (data.candidates && data.candidates[0].content.parts[0].text) {
+        setWritingFeedback(data.candidates[0].content.parts[0].text);
+        setXp(prev => prev + 50);
+      } else {
+        setWritingFeedback("Could not generate feedback. The API returned an empty response.");
+      }
+    } catch (e: any) {
+      setWritingFeedback("Network Error: Could not connect to Gemini AI. " + e.message);
+    } finally {
+      setIsEvaluatingWriting(false);
+    }
+  };
+
   const handleSimulateSpeaking = () => {
     setSpeakingStatus('listening');
     setSpeakingTranscript('');

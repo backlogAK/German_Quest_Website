@@ -1,3 +1,10 @@
+To make authentication optional, we need to redesign the application flow so that the main layout is always visible. If a user is not logged in, they should see a "Sign In" button instead of the XP counter, and their progress will simply not be saved to Firebase.
+
+Here is the updated `src/App.tsx` that removes the mandatory login wall and elegantly integrates the authentication state into the header.
+
+Replace your entire `src/App.tsx` file with this code:
+
+```tsx
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -37,8 +44,8 @@ const LEVELS = [
 
 const CURRICULUM = {
   A1: [
-    { title: "Definite & Indefinite Articles", de: "Bestimmte & Unbestimmte Artikel", desc: "Master masculine, feminine, neuter articles and negation with 'kein'.", content: `### 1. Definite & Indefinite Articles\n* **Definite (the):** der Mann (masculine), die Frau (feminine), das Kind (neuter), die Kinder (plural).` },
-    { title: "Cases (Kasus)", de: "Kasus", desc: "Understand Nominative, Accusative, and Dative.", content: `### 2. Cases\n* **Nominativ:** Subject\n* **Akkusativ:** Direct object\n* **Dativ:** Indirect object` },
+    { title: "Definite & Indefinite Articles", de: "Bestimmte & Unbestimmte Artikel", desc: "Master masculine, feminine, neuter articles and negation with 'kein'.", content: `### 1. Definite & Indefinite Articles\n**Definite (the):** der Mann (masculine), die Frau (feminine), das Kind (neuter), die Kinder (plural).` },
+    { title: "Cases (Kasus)", de: "Kasus", desc: "Understand Nominative, Accusative, and Dative.", content: `### 2. Cases\n**Nominativ:** Subject\n**Akkusativ:** Direct object\n**Dativ:** Indirect object` },
     { title: "Verb Conjugation", de: "Verbkonjugation", desc: "Learn regular present tense endings.", content: `### 3. Verb Conjugation\nich spiele, du spielst, er/sie/es spielt.` }
   ],
   A2: [{ title: "Advanced Nomengruppe", de: "Erweiterte Nomengruppe", desc: "Adjective endings across cases.", content: `### 1. Nomengruppe\nder große Tisch, die rote Jacke.` }],
@@ -97,12 +104,14 @@ export default function App() {
   const [user, setUser] = useState<any>(null);
   const [xp, setXp] = useState(0);
   const [selectedLevel, setSelectedLevel] = useState('A1');
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Listen for login/logout and sync with Firebase
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
+        setShowAuthModal(false);
         const userDocRef = doc(db, 'users', currentUser.uid);
         const userDoc = await getDoc(userDocRef);
         if (userDoc.exists()) {
@@ -112,13 +121,13 @@ export default function App() {
           await setDoc(userDocRef, { xp: 0, level: 'A1' });
         }
       } else {
-        setXp(0);
+        setXp(0); // Reset XP for guests
       }
     });
     return () => unsubscribe();
   }, []);
 
-  // Save XP and Level to Firestore whenever they change
+  // Save XP and Level to Firestore whenever they change (only if logged in)
   useEffect(() => {
     if (user) {
       setDoc(doc(db, 'users', user.uid), { xp, level: selectedLevel }, { merge: true });
@@ -240,16 +249,24 @@ export default function App() {
 
   const handleLogout = () => signOut(auth);
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans px-6">
-        <Auth />
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans relative">
+      
+      {/* Auth Modal overlay for when users want to log in */}
+      {showAuthModal && !user && (
+        <div className="absolute inset-0 z-[100] bg-slate-950/80 backdrop-blur-sm flex justify-center items-center p-6">
+          <div className="relative w-full max-w-md">
+            <button 
+              onClick={() => setShowAuthModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white z-10"
+            >
+              ✕
+            </button>
+            <Auth />
+          </div>
+        </div>
+      )}
+
       <header className="border-b border-slate-800 bg-slate-900/80 sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center space-x-3 cursor-pointer" onClick={() => { setCurrentView('hub'); setActiveGameModule(null); }}>
           <div className="bg-indigo-600 p-2.5 rounded-xl shadow-lg shadow-indigo-500/30">
@@ -263,13 +280,31 @@ export default function App() {
         </div>
 
         <div className="flex items-center space-x-6">
-          <button onClick={handleLogout} className="text-xs font-bold text-slate-400 hover:text-rose-400 transition-colors">
-            Sign Out
-          </button>
-          <div className="flex items-center space-x-2 bg-slate-800 px-4 py-2 rounded-2xl">
-            <Trophy className="w-5 h-5 text-amber-400" />
-            <div className="text-sm font-bold text-amber-300">{xp} XP</div>
-          </div>
+          {user ? (
+            <>
+              <button onClick={handleLogout} className="text-xs font-bold text-slate-400 hover:text-rose-400 transition-colors">
+                Sign Out
+              </button>
+              <div className="flex items-center space-x-2 bg-slate-800 px-4 py-2 rounded-2xl">
+                <Trophy className="w-5 h-5 text-amber-400" />
+                <div className="text-sm font-bold text-amber-300">{xp} XP</div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center space-x-2 bg-slate-800 px-4 py-2 rounded-2xl opacity-50">
+                <Trophy className="w-5 h-5 text-amber-400" />
+                <div className="text-sm font-bold text-amber-300">{xp} XP</div>
+              </div>
+              <button 
+                onClick={() => setShowAuthModal(true)} 
+                className="text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl transition-all"
+              >
+                Sign In to Save
+              </button>
+            </>
+          )}
+
           <div className="flex bg-slate-800 p-1 rounded-2xl">
             {LEVELS.map(lvl => (
               <button
@@ -453,7 +488,7 @@ export default function App() {
         </div>
       </main>
 
-      <footer className="border-t border-slate-800 bg-slate-900/40 py-6 px-6 text-center text-xs text-slate-500">
+      <<footer className="border-t border-slate-800 bg-slate-900/40 py-6 px-6 text-center text-xs text-slate-500">
         GermanQuest AI Platform • Developed by Ayush Goley (GitHub: backlogAK)
       </footer>
     </div>

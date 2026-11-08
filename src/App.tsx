@@ -1,10 +1,3 @@
-To make authentication optional, we need to redesign the application flow so that the main layout is always visible. If a user is not logged in, they should see a "Sign In" button instead of the XP counter, and their progress will simply not be saved to Firebase.
-
-Here is the updated `src/App.tsx` that removes the mandatory login wall and elegantly integrates the authentication state into the header.
-
-Replace your entire `src/App.tsx` file with this code:
-
-```tsx
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -14,7 +7,7 @@ import Auth from './Auth';
 // --- INLINE SVGS ---
 const Volume2 = (p: any) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>;
 const ChevronDown = (p: any) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><polyline points="6 9 12 15 18 9"></polyline></svg>;
-const GraduationCap = (p: any) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M22 10v6M2 10l10-5 10 5-10 5z"></path><path d="M6 12v5c3 3 9 3 12 0v-5"></path></svg>;
+const GraduationCap = (p: any) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M22 10v6M2 10l10-5 10 5-10 5z"></path><path d="M6 12v5c3 3 9 3 9 12 0v-5"></path></svg>;
 const BookOpen = (p: any) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>;
 const Trophy = (p: any) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>;
 const Mic = (p: any) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...p}><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v1a7 7 0 0 1-14 0v-1"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>;
@@ -205,32 +198,6 @@ export default function App() {
         setIsEvaluatingWriting(false);
         return;
       }
-
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ 
-            text: `You are an expert German language tutor. The student (Level ${selectedLevel}) was asked to translate this English sentence into German:\n\nEnglish: "${currentWritingPrompt}"\n\nStudent's German translation: "${userWritingText}"\n\nEvaluate if the German translation accurately conveys the semantic meaning of the English sentence (it doesn't need to be word-for-word). Provide friendly, concise feedback, point out any grammar or spelling mistakes, and offer a natural-sounding alternative if theirs is awkward.` 
-          }] }]
-        })
-      });
-      const data = await response.json();
-
-      if (data.error) {
-        setWritingFeedback(`API Error: ${data.error.message}`);
-      } else if (data.candidates && data.candidates[0].content.parts[0].text) {
-        setWritingFeedback(data.candidates[0].content.parts[0].text);
-        setXp(prev => prev + 50);
-      } else {
-        setWritingFeedback("Could not generate feedback. The API returned an empty response.");
-      }
-    } catch (e: any) {
-      setWritingFeedback("Network Error: Could not connect to Gemini AI. " + e.message);
-    } finally {
-      setIsEvaluatingWriting(false);
-    }
-  };
 
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`, {
         method: 'POST',

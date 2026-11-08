@@ -488,7 +488,7 @@ export default function App() {
         </div>
       </main>
 
-      <<footer className="border-t border-slate-800 bg-slate-900/40 py-6 px-6 text-center text-xs text-slate-500">
+      <footer className="border-t border-slate-800 bg-slate-900/40 py-6 px-6 text-center text-xs text-slate-500">
         GermanQuest AI Platform • Developed by Ayush Goley (GitHub: backlogAK)
       </footer>
     </div>
